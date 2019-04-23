@@ -1,0 +1,9 @@
+spectralcube-imaging
+-------------------
+
+This is just an (work in progress) academic work :)
+
+```sh
+$ cd example-data
+$ ./spectralcube_imaging.py example-data/rodrigo.fits example-data/i_prime.dat
+```
