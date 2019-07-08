@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+# code by Rodrigo Gonzales-Castillo
+# modify by Héctor Salas Olave
 
 import sys
 from astropy.table import Table
@@ -53,12 +55,14 @@ def perform_with_filter_file(fits_filename, filter_filename): #(args):
     cube_data, hdu = read_spectralcube(fits_filename)
 
     filter_table = Table.read(filter_filename, format='ascii')
-    filter_data = np.array([[item[0], item[1]] for item in filter_table.as_array()])
+    filter_data = np.array([[item[0], item[1]] for item in
+                            filter_table.as_array()])
 
     # wavelengths converting from Angstrom to nm
     filter_data[:, 0] = (filter_data[:, 0] * u.Angstrom).to(u.nanometer).value
 
     # if the values are in photons, then convert to energy, multiplying lambda with photon
+
     if 'photon' in filter_table.meta['comments']:
         print(f'Filter is in "photons", converting to "energy"')
         filter_data[:, 1] = filter_data[:, 0] * filter_data[:, 1]
@@ -97,16 +101,22 @@ def perform(cube_data, hdu, filter_data):
     print('>> Calculating the lambda of each slice in the cube')
 
     # calculate the wavelength of each slice
-    slices_lambda = (np.array([CRVAL3 + CD3_3 * (i - CRPIX3) for i in range(n_slices)]) * u.Angstrom).to(u.nm).value
+    slices_lambda = (np.array([CRVAL3 + CD3_3 * (i - CRPIX3) for i in
+                               range(n_slices)]) * u.Angstrom).to(u.nm).value
 
     print('>> Interpolating to a common lambda base')
+    #finding position of the filter extremes in the cube array
+    idx_1 = np.searchsorted(slices_lambda, filter_data[:,0][0])
+    idx_2 = np.searchsorted(slices_lambda, filter_data[:,0][-1], side='right')
+
     # creating the based to interpolation (based in https://stackoverflow.com/a/49950451 )
-    base_lambda = np.concatenate((slices_lambda, filter_data[:, 0]))
+    base_lambda = np.concatenate((slices_lambda[idx_1:idx_2],
+                                  filter_data[:, 0]))
     base_lambda = np.unique(base_lambda) # this also sort
 
-    plt.plot(base_lambda)
-    plt.show()
-    plt.figure()
+    # plt.plot(base_lambda)
+    # plt.show()
+    # plt.figure()
 
     # because this is heavy computation, we change the type.
     # numpy.finfo(dtype('float16')) said that float16 can be at max 6.55040e+04,
@@ -114,7 +124,6 @@ def perform(cube_data, hdu, filter_data):
     slices_lambda = slices_lambda.astype(np.float32)
     base_lambda = base_lambda.astype(np.float32)
     #cube_data = cube_data.astype(np.float16)
-
     interpolate_cube = interpolate.interp1d(slices_lambda, cube_data, axis=0, assume_sorted=True)#, fill_value='extrapolate')
     cube_data_interpolated = interpolate_cube(base_lambda)
 
@@ -145,8 +154,9 @@ def perform(cube_data, hdu, filter_data):
     hdul = fits.HDUList([hdu])
 
     now = datetime.datetime.now()
-    hdul.writeto(f'result_{now.strftime("%c")}.fits')
+    print(f'result_{now.strftime("%c")}.fits')
 
+    hdul.writeto(f'result_{now.strftime("%c")}.fits')
     print(result.shape)
 
     #plt.imshow(result, cmap='gray')
