@@ -3,16 +3,15 @@
 # modify by Héctor Salas Olave
 
 import sys
-from astropy.table import Table
+import datetime
 import numpy as np
+import astropy.units as u
+import matplotlib.pyplot as plt
 from astropy.io import fits
 from scipy.stats import norm
-from astropy import units as u
-from scipy import interpolate
+from astropy.table import Table
+from scipy.interpolate import interp1d, RegularGridInterpolator
 from scipy import integrate
-import matplotlib
-import matplotlib.pyplot as plt
-import datetime
 
 
 def read_spectralcube(fits_filename, hdu_data_index=1, hdu_header_units='BUNIT'):
@@ -86,11 +85,16 @@ def perform_with_filter_range(fits_filename, lambda1, lambda2):
     perform(cube_data, hdu, normalize_filter(filter_data))
 
 
-def perform(cube_data, hdu, filter_data):
+def perform(cube_data, hdu, filter_data, nan='replace'):
     """
+    Creates a 2D image from a datacube and a given filter
 
-    :param cube_data: in W/m**2/nm
-    :param filter_data: in nm vs energy
+    Inputs:
+        cube_data:  Data from the cube in W/m**2/nm (array like)
+        filter_data:    Filter data, [wavelenth (nm), response]  (array like)
+        nan:    NaN treatement. If nan='replace' NaN values are replaced by
+                the interpolated values.
+
     :return:
     """
     n_slices = cube_data.shape[0]
@@ -124,22 +128,39 @@ def perform(cube_data, hdu, filter_data):
     slices_lambda = slices_lambda.astype(np.float32)
     base_lambda = base_lambda.astype(np.float32)
     #cube_data = cube_data.astype(np.float16)
-    interpolate_cube = interpolate.interp1d(slices_lambda, cube_data, axis=0, assume_sorted=True)#, fill_value='extrapolate')
+
+    if nan == 'replace':
+        print('>> NaN values replaced using interpolation')
+        aux = cube_data.shape
+        wl = np.linspace(0, aux[0], aux[0])
+        x = np.linspace(0, aux[1], aux[1])
+        y = np.linspace(0, aux[2], aux[2])
+        cube_function = RegularGridInterpolator((wl, x, y), cube_data, method='nearest')
+        idx_nan = np.where(np.isnan(cube_data))
+        cube_data[idx_nan] = cube_function(idx_nan)
+    #   add interpolation to remove nans here
+
+
+    interpolate_cube = interp1d(slices_lambda, cube_data, axis=0,
+                                assume_sorted=True)#, fill_value='extrapolate')
     cube_data_interpolated = interpolate_cube(base_lambda)
 
-    interpolate_filter = interpolate.interp1d(filter_data[:, 0], filter_data[:, 1], fill_value='extrapolate')
+    interpolate_filter = interp1d(filter_data[:, 0], filter_data[:, 1],
+                                  fill_value='extrapolate')
     filter_data_interpolated = interpolate_filter(base_lambda)
 
     print('>> Preparing integration')
 
-    # this is necessary in orden to multiply each slide with their correnpondent lambda filter
+    # this is necessary in orden to multiply each slide with their
+    # correnpondent lambda filter
     for lambda_index in range(0, cube_data_interpolated.shape[0]):
         cube_data_interpolated[lambda_index, :, :] = \
             cube_data_interpolated[lambda_index, :, :] * filter_data_interpolated[lambda_index]
 
     print('>> Performing integration')
 
-    integral_sup = integrate.trapz(cube_data_interpolated, x=base_lambda, axis=0)
+    integral_sup = integrate.trapz(cube_data_interpolated, x=base_lambda,
+                                   axis=0)
 
     integral_sub = integrate.trapz(filter_data_interpolated, x=base_lambda)
 
@@ -148,6 +169,7 @@ def perform(cube_data, hdu, filter_data):
     # Saving the image
     hdu = fits.PrimaryHDU(result)
     hdr = hdu.header
+    import pdb; pdb.set_trace()
     hdr['NAXIS'] = 2
     hdr['NAXIS1'] = result.shape[0]
     hdr['NAXIS2'] = result.shape[1]
@@ -163,6 +185,8 @@ def perform(cube_data, hdu, filter_data):
     #plt.colorbar()
     #plt.show()
 
+def fill_header(hdr, ):
+    pass
 
 if __name__ == '__main__':
 
