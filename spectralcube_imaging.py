@@ -14,25 +14,26 @@ from scipy.interpolate import interp1d, RegularGridInterpolator
 from scipy import integrate
 
 
-def read_spectralcube(fits_filename, hdu_data_index=1, hdu_header_units='BUNIT'):
+def read_spectralcube(fits_filename, hdu_header_units='BUNIT', data_ext=1):
     """
-    Read the spectroscopic cube filename
-    :param hdu_header_units:
-    :param hdu_data_index:
-    :param fits_filename: string
-    :return: spectralcube in W/m**2/nm, hdu
+    Read the datacube and return its data and header
+
+    Input:
+    Output:
+        cube_data: spectralcube in W/m**2/nm, hdu
     """
-    with fits.open(fits_filename) as hdu:
-        fits_units = u.Unit(hdu[hdu_data_index].header[hdu_header_units])
-        cube_data = hdu[hdu_data_index].data
 
-        ref_energy_units = u.Unit('W/m**2/nm')
-        if fits_units != ref_energy_units:
-            print(f'Cube is in {fits_units}, converting to {ref_energy_units}')
-            cube_data = (cube_data * fits_units).to(ref_energy_units).value
+    cube_data = fits.getdata(fits_filename)
+    cube_hdr = fits.getheader(fits_filename, ext=data_ext)
+    fits_units = u.Unit(cube_hdr[hdu_header_units])
 
-        # take a slice as cube_data[index, :, :]
-        return cube_data, hdu[hdu_data_index]
+    ref_energy_units = u.Unit('W/m**2/nm')
+    if fits_units != ref_energy_units:
+        print(f'Cube is in {fits_units}, converting to {ref_energy_units}')
+        cube_data = (cube_data * fits_units).to(ref_energy_units).value
+
+    # take a slice as cube_data[index, :, :]
+    return cube_data, cube_hdr
 
 
 def normalize_filter(filter_data):
@@ -85,12 +86,13 @@ def perform_with_filter_range(fits_filename, lambda1, lambda2):
     perform(cube_data, hdu, normalize_filter(filter_data))
 
 
-def perform(cube_data, hdu, filter_data, nan='replace'):
+def perform(cube_data, cube_hdr, filter_data, nan='replace'):
     """
     Creates a 2D image from a datacube and a given filter
 
     Inputs:
         cube_data:  Data from the cube in W/m**2/nm (array like)
+        cube_hdr:
         filter_data:    Filter data, [wavelenth (nm), response]  (array like)
         nan:    NaN treatement. If nan='replace' NaN values are replaced by
                 the interpolated values.
@@ -98,9 +100,9 @@ def perform(cube_data, hdu, filter_data, nan='replace'):
     :return:
     """
     n_slices = cube_data.shape[0]
-    CRVAL3 = hdu.header['CRVAL3']
-    CD3_3 = hdu.header['CD3_3']
-    CRPIX3 = hdu.header['CRPIX3']
+    CRVAL3 = cube_hdr['CRVAL3']
+    CD3_3 = cube_hdr['CD3_3']
+    CRPIX3 = cube_hdr['CRPIX3']
 
     print('>> Calculating the lambda of each slice in the cube')
 
@@ -168,11 +170,8 @@ def perform(cube_data, hdu, filter_data, nan='replace'):
 
     # Saving the image
     hdu = fits.PrimaryHDU(result)
-    hdr = hdu.header
-    import pdb; pdb.set_trace()
-    hdr['NAXIS'] = 2
-    hdr['NAXIS1'] = result.shape[0]
-    hdr['NAXIS2'] = result.shape[1]
+    hdr = fill_header(cube_hdr, result)
+    hdu.header = hdr
     hdul = fits.HDUList([hdu])
 
     now = datetime.datetime.now()
@@ -185,8 +184,38 @@ def perform(cube_data, hdu, filter_data, nan='replace'):
     #plt.colorbar()
     #plt.show()
 
-def fill_header(hdr, ):
-    pass
+def fill_header(hdr, data):
+    """ Creates the new header for the 2D image from the header of the data
+    extension of the datacube.
+
+    Input:
+        hdr:    Header from the data extension of the original datacube
+        data:   2D data created from the datacube
+    Output:
+        hdr:    Modified header
+    """
+
+    # replace the card values
+    hdr.insert(0,('SIMPLE', True))
+    hdr['NAXIS'] = 2
+    hdr['NAXIS1'] = data.shape[0]
+    hdr['NAXIS2'] = data.shape[1]
+    hdr['BUNIT'] = 'W/m**2'
+
+    # remove unecessary cards
+    hdr.remove('XTENSION')
+    hdr.remove('NAXIS3')
+    hdr.remove('CTYPE3')
+    hdr.remove('CUNIT3')
+    hdr.remove('CD3_3')
+    hdr.remove('CRPIX3')
+    hdr.remove('CRVAL3')
+    hdr.remove('CD1_3')
+    hdr.remove('CD2_3')
+    hdr.remove('CD3_1')
+    hdr.remove('CD3_2')
+
+    return hdr
 
 if __name__ == '__main__':
 
