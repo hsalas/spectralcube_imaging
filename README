@@ -1,9 +1,3 @@
 spectralcube-imaging
 -------------------
-
-This is just an (work in progress) academic work :)
-
-```sh
-$ cd example-data
-$ ./spectralcube_imaging.py example-data/rodrigo.fits example-data/i_prime.dat
-```
+Code to integrate a datacube in wavelenght, using a given filter or wavelength limits, and create a 2D image. 
