@@ -148,16 +148,15 @@ def perform(cube_data, cube_hdr, filter_data, nan='replace'):
     if nan == 'replace':
         print('>> NaN values replaced using interpolation')
         aux = cube_data.shape
-        wl = np.linspace(0, aux[0], aux[0])
-        x = np.linspace(0, aux[1], aux[1])
-        y = np.linspace(0, aux[2], aux[2])
-        cube_function = RegularGridInterpolator((wl, x, y), cube_data, method='nearest')
-        idx_nan = np.where(np.isnan(cube_data))
-        cube_data[idx_nan] = cube_function(idx_nan)
-    #   add interpolation to remove nans here
+        cube_data_clean = np.full_like(cube_data, np.nan)
+        for i in range(aux[1]):
+            for j in range(aux[2]):
+                wgood = np.isfinite(cube_data[:, i, j])
+                if np.any(wgood):
+                    goodwl = slices_lambda[wgood]
+                    cube_data_clean[:, i, j] = np.interp(slices_lambda, goodwl, cube_data[wgood, i, j])
 
-
-    interpolate_cube = interp1d(slices_lambda, cube_data, axis=0,
+    interpolate_cube = interp1d(slices_lambda, cube_data_clean, axis=0,
                                 assume_sorted=True)#, fill_value='extrapolate')
     cube_data_interpolated = interpolate_cube(base_lambda)
 
