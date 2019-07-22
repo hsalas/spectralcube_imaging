@@ -3,14 +3,13 @@
 # modify by Héctor Salas Olave
 
 import sys
-import datetime
 import numpy as np
 import astropy.units as u
 import matplotlib.pyplot as plt
 from astropy.io import fits
 from scipy.stats import norm
 from astropy.table import Table
-from scipy.interpolate import interp1d, RegularGridInterpolator
+from scipy.interpolate import interp1d
 from scipy import integrate
 
 
@@ -53,9 +52,9 @@ def normalize_filter(filter_data):
     return filter_data
 
 
-def perform_with_filter_file(fits_filename, filter_filename): #(args):
-    #fits_filename = args[0]
-    #filter_filename = args[1]
+def perform_with_filter_file(fits_filename, filter_filename):  # (args):
+    # fits_filename = args[0]
+    # filter_filename = args[1]
 
     cube_data, hdu = read_spectralcube(fits_filename)
 
@@ -66,13 +65,14 @@ def perform_with_filter_file(fits_filename, filter_filename): #(args):
     # wavelengths converting from Angstrom to nm
     filter_data[:, 0] = (filter_data[:, 0] * u.Angstrom).to(u.nanometer).value
 
-    # if the values are in photons, then convert to energy, multiplying lambda with photon
+    # if the values are in photons, then convert to energy,
+    # multiplying lambda with photon
 
     if 'photon' in filter_table.meta['comments']:
         print(f'Filter is in "photons", converting to "energy"')
         filter_data[:, 1] = filter_data[:, 0] * filter_data[:, 1]
 
-    #filter_data / np.
+    # filter_data / np.
 
     # to be used later in 2d image name
     global name_filter
@@ -125,14 +125,14 @@ def perform(cube_data, cube_hdr, filter_data, nan='replace'):
                                range(n_slices)]) * u.Angstrom).to(u.nm).value
 
     print('>> Interpolating to a common lambda base')
-    #finding position of the filter extremes in the cube array
-    idx_1 = np.searchsorted(slices_lambda, filter_data[:,0][0])
-    idx_2 = np.searchsorted(slices_lambda, filter_data[:,0][-1], side='right')
+    # finding position of the filter extremes in the cube array
+    idx_1 = np.searchsorted(slices_lambda, filter_data[:, 0][0])
+    idx_2 = np.searchsorted(slices_lambda, filter_data[:, 0][-1], side='right')
 
     # creating the based to interpolation (based in https://stackoverflow.com/a/49950451 )
     base_lambda = np.concatenate((slices_lambda[idx_1:idx_2],
                                   filter_data[:, 0]))
-    base_lambda = np.unique(base_lambda) # this also sort
+    base_lambda = np.unique(base_lambda)  # this also sort
 
     # plt.plot(base_lambda)
     # plt.show()
@@ -143,7 +143,7 @@ def perform(cube_data, cube_hdr, filter_data, nan='replace'):
     # so is cover for the wavelengths in nm
     slices_lambda = slices_lambda.astype(np.float32)
     base_lambda = base_lambda.astype(np.float32)
-    #cube_data = cube_data.astype(np.float16)
+    # cube_data = cube_data.astype(np.float16)
 
     if nan == 'replace':
         print('>> NaN values replaced using interpolation')
@@ -157,7 +157,7 @@ def perform(cube_data, cube_hdr, filter_data, nan='replace'):
                     cube_data_clean[:, i, j] = np.interp(slices_lambda, goodwl, cube_data[wgood, i, j])
 
     interpolate_cube = interp1d(slices_lambda, cube_data_clean, axis=0,
-                                assume_sorted=True)#, fill_value='extrapolate')
+                                assume_sorted=True)  #,fill_value='extrapolate')
     cube_data_interpolated = interpolate_cube(base_lambda)
 
     interpolate_filter = interp1d(filter_data[:, 0], filter_data[:, 1],
@@ -186,14 +186,15 @@ def perform(cube_data, cube_hdr, filter_data, nan='replace'):
     hdu.header = fill_header(cube_hdr, result)
     hdul = fits.HDUList([hdu])
 
-    name = name_fits+ '_' + name_filter + '.fits'
+    name = name_fits + '_' + name_filter + '.fits'
     print(name)
     hdul.writeto(name)
     print(result.shape)
 
-    #plt.imshow(result, cmap='gray')
-    #plt.colorbar()
-    #plt.show()
+    # plt.imshow(result, cmap='gray')
+    # plt.colorbar()
+    # plt.show()
+
 
 def fill_header(hdr, data):
     """ Creates the new header for the 2D image from the header of the data
@@ -207,7 +208,7 @@ def fill_header(hdr, data):
     """
 
     # replace the card values
-    hdr.insert(0,('SIMPLE', True))
+    hdr.insert(0, ('SIMPLE', True))
     hdr['NAXIS'] = 2
     hdr['NAXIS1'] = data.shape[0]
     hdr['NAXIS2'] = data.shape[1]
@@ -227,6 +228,7 @@ def fill_header(hdr, data):
     hdr.remove('CD3_2')
 
     return hdr
+
 
 if __name__ == '__main__':
 
