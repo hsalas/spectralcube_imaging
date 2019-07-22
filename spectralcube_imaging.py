@@ -33,6 +33,11 @@ def read_spectralcube(fits_filename, hdu_header_units='BUNIT', data_ext=1):
         cube_data = (cube_data * fits_units).to(ref_energy_units).value
 
     # take a slice as cube_data[index, :, :]
+
+    # to be used in 2d image name
+    global name_fits
+    name_fits = fits_filename[:fits_filename.index('.fits')]
+
     return cube_data, cube_hdr
 
 
@@ -69,6 +74,11 @@ def perform_with_filter_file(fits_filename, filter_filename): #(args):
 
     #filter_data / np.
 
+    # to be used later in 2d image name
+    global name_filter
+    name_filter = filter_filename[:filter_filename.index('.dat')]
+    # this is assuming the filter ends in .dat
+
     perform(cube_data, hdu, normalize_filter(filter_data))
 
 
@@ -82,6 +92,10 @@ def perform_with_filter_range(fits_filename, lambda1, lambda2):
     energy = norm(mu, 1).pdf(wavelength)
 
     filter_data = np.array([[wl, e * wl] for wl, e in zip(wavelength, energy)])
+
+    # to be used later in 2d image name
+    global name_filter
+    name_filter = str(lambda1) + '_' + str(lambda2)
 
     perform(cube_data, hdu, normalize_filter(filter_data))
 
@@ -154,7 +168,7 @@ def perform(cube_data, cube_hdr, filter_data, nan='replace'):
     print('>> Preparing integration')
 
     # this is necessary in orden to multiply each slide with their
-    # correnpondent lambda filter
+    # corresponding lambda filter
     for lambda_index in range(0, cube_data_interpolated.shape[0]):
         cube_data_interpolated[lambda_index, :, :] = \
             cube_data_interpolated[lambda_index, :, :] * filter_data_interpolated[lambda_index]
@@ -170,14 +184,12 @@ def perform(cube_data, cube_hdr, filter_data, nan='replace'):
 
     # Saving the image
     hdu = fits.PrimaryHDU(result)
-    hdr = fill_header(cube_hdr, result)
-    hdu.header = hdr
+    hdu.header = fill_header(cube_hdr, result)
     hdul = fits.HDUList([hdu])
 
-    now = datetime.datetime.now()
-    print(f'result_{now.strftime("%c")}.fits')
-
-    hdul.writeto(f'result_{now.strftime("%c")}.fits')
+    name = name_fits+ '_' + name_filter + '.fits'
+    print(name)
+    hdul.writeto(name)
     print(result.shape)
 
     #plt.imshow(result, cmap='gray')
@@ -200,7 +212,7 @@ def fill_header(hdr, data):
     hdr['NAXIS'] = 2
     hdr['NAXIS1'] = data.shape[0]
     hdr['NAXIS2'] = data.shape[1]
-    hdr['BUNIT'] = 'W/m**2'
+    hdr['BUNIT'] = 'W/m**2/nm'
 
     # remove unecessary cards
     hdr.remove('XTENSION')
